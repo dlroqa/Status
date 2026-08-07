@@ -70,3 +70,31 @@ describe('mapUsage', () => {
     expect(fiveHour.percent).toBe(100);
   });
 });
+
+describe('monthly cap', () => {
+  it('uses the user-configured cap when the provider reports none, and labels it as theirs', () => {
+    const monthly = mapUsage(parse(liveResponse), NOW, 10_000).monthly;
+
+    if (!isLive(monthly)) throw new Error('expected live');
+    expect(monthly.percent).toBeCloseTo(55.98, 5);
+    // A self-imposed budget must not read as a limit the provider enforces.
+    expect(monthly.source).toBe('your monthly cap');
+  });
+
+  it("prefers the provider's own cap over the user's", () => {
+    const withProviderCap = parse({
+      ...liveResponse,
+      extra_usage: { ...liveResponse.extra_usage, monthly_limit: 20_000 },
+    });
+
+    const monthly = mapUsage(withProviderCap, NOW, 10_000).monthly;
+    if (!isLive(monthly)) throw new Error('expected live');
+    expect(monthly.percent).toBeCloseTo(27.99, 5);
+    expect(monthly.source).toBe('anthropic extra usage');
+  });
+
+  it('stays barless when neither the provider nor the user set a cap', () => {
+    const monthly = mapUsage(parse(liveResponse), NOW, undefined).monthly;
+    expect(monthly.state).toBe('unavailable');
+  });
+});

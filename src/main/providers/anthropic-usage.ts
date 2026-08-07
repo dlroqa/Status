@@ -88,6 +88,8 @@ export interface AnthropicRequestContext {
   readonly productName: string;
   /** What the user should run to re-authenticate, e.g. "Run `claude` and sign in again." */
   readonly reauthHint: string;
+  /** User-configured monthly spend cap in minor units, if any. */
+  readonly monthlyCapMinor?: number;
 }
 
 /** Fetches and maps the three windows, turning every failure into an actionable reason. */
@@ -112,7 +114,7 @@ export async function fetchUsageWindows(
     );
   }
 
-  return mapUsage(parsed.data, context.now);
+  return mapUsage(parsed.data, context.now, context.monthlyCapMinor);
 }
 
 export async function fetchProfile(
@@ -149,12 +151,16 @@ export async function fetchProfile(
 }
 
 /** Exported for tests: maps a parsed usage response onto the three windows. */
-export function mapUsage(usage: UsageResponse, now: Date): Record<WindowKind, Measurement> {
+export function mapUsage(
+  usage: UsageResponse,
+  now: Date,
+  monthlyCapMinor?: number,
+): Record<WindowKind, Measurement> {
   const observedAt = now.toISOString();
   return {
     '5h': mapRollingWindow(usage.five_hour, '5-hour', observedAt),
     weekly: mapRollingWindow(usage.seven_day, 'weekly', observedAt),
-    monthly: mapExtraUsage(usage.extra_usage, observedAt),
+    monthly: mapExtraUsage(usage.extra_usage, observedAt, monthlyCapMinor),
   };
 }
 
@@ -185,6 +191,7 @@ function mapRollingWindow(
 function mapExtraUsage(
   extra: z.infer<typeof ExtraUsageSchema> | null | undefined,
   observedAt: string,
+  monthlyCapMinor?: number,
 ): Measurement {
   if (extra === null || extra === undefined) {
     return unsupported('this plan has no extra-usage credits');
@@ -197,18 +204,22 @@ function mapExtraUsage(
   const exponent = extra.decimal_places ?? 2;
   const usedMinor = extra.used_credits ?? 0;
   const spent = formatMoney(usedMinor, currency, exponent);
-  const limitMinor = extra.monthly_limit;
+  // The provider's own cap wins; the user's configured cap is the fallback that makes the
+  // row measurable at all. Which one produced the number is recorded in `source`, so a
+  // self-imposed budget is never mistaken for a limit the provider enforces.
+  const providerCap = extra.monthly_limit != null && extra.monthly_limit > 0 ? extra.monthly_limit : undefined;
+  const limitMinor = providerCap ?? monthlyCapMinor;
 
   if (limitMinor == null || limitMinor <= 0) {
     return unavailable('no monthly spend cap set', {
-      detail: `${spent} used this month`,
+      detail: `${spent} used this month — set a cap to show a bar`,
       observedAt,
     });
   }
 
   return live({
     percent: clampPercent((usedMinor / limitMinor) * 100),
-    source: 'anthropic extra usage',
+    source: providerCap !== undefined ? 'anthropic extra usage' : 'your monthly cap',
     observedAt,
     detail: `${spent} of ${formatMoney(limitMinor, currency, exponent)}`,
   });

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Settings2 } from 'lucide-react';
+import { RefreshCw, Settings2, UserPlus } from 'lucide-react';
 import type { AccountUsage } from '@shared/account';
 import { formatAgo } from '@shared/format';
 import type { AppInfo, UsageSnapshot } from '@shared/ipc';
 import { AccountRow } from './components/AccountRow';
+import { AccountsPanel } from './components/AccountsPanel';
 
 const EMPTY_SNAPSHOT: UsageSnapshot = {
   accounts: [],
@@ -14,6 +15,7 @@ const EMPTY_SNAPSHOT: UsageSnapshot = {
 export function App(): React.ReactElement {
   const [snapshot, setSnapshot] = useState<UsageSnapshot>(EMPTY_SNAPSHOT);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [accountsOpen, setAccountsOpen] = useState(false);
   // Reset times count down, so the view needs its own clock rather than only re-rendering on new data.
   const [now, setNow] = useState(() => new Date());
 
@@ -63,7 +65,7 @@ export function App(): React.ReactElement {
 
       <div className="scroll">
         {snapshot.accounts.length === 0 ? (
-          <EmptyState loaded={hasLoaded} configPath={appInfo?.configPath} />
+          <EmptyState loaded={hasLoaded} onOpenAccounts={() => setAccountsOpen(true)} />
         ) : (
           <div className="grid">
             <div className="grid__head">
@@ -86,10 +88,14 @@ export function App(): React.ReactElement {
         <span>v{appInfo?.version ?? '—'}</span>
         {appInfo !== null && <span>polling every {appInfo.pollSeconds}s</span>}
         <div className="toolbar__spacer" />
-        <button type="button" onClick={() => void window.usageMonitor.openConfig()}>
-          <Settings2 size={12} aria-hidden="true" /> Edit accounts
+        <button type="button" onClick={() => setAccountsOpen(true)}>
+          <Settings2 size={12} aria-hidden="true" /> Manage accounts
         </button>
       </footer>
+
+      {accountsOpen && (
+        <AccountsPanel onClose={() => setAccountsOpen(false)} configPath={appInfo?.configPath} />
+      )}
     </div>
   );
 }
@@ -106,10 +112,10 @@ function poolPartner(
 
 function EmptyState({
   loaded,
-  configPath,
+  onOpenAccounts,
 }: {
   readonly loaded: boolean;
-  readonly configPath: string | undefined;
+  readonly onOpenAccounts: () => void;
 }): React.ReactElement {
   if (!loaded) {
     return (
@@ -121,21 +127,15 @@ function EmptyState({
 
   return (
     <div className="empty">
-      <h2>No subscription accounts found</h2>
+      <h2>No accounts connected yet</h2>
       <p>
-        This monitor reads the subscription sessions your CLIs already hold. Sign in to one and it will
-        appear here — no API keys are used or accepted.
+        Connect a provider and its 5-hour, weekly and monthly usage will appear here. Signing in
+        happens in the provider&apos;s own tool — this app never asks for your password and never
+        uses API keys.
       </p>
-      <p>
-        Claude: run <code>claude</code> · ChatGPT: run <code>codex login</code> · OpenCode: run{' '}
-        <code>opencode auth login</code>
-      </p>
-      {configPath !== undefined && (
-        <p>
-          To watch a second account of the same provider, add it to <code>{configPath}</code> with its own
-          config directory.
-        </p>
-      )}
+      <button type="button" className="button button--primary button--large" onClick={onOpenAccounts}>
+        <UserPlus size={15} aria-hidden="true" /> Connect an account
+      </button>
     </div>
   );
 }

@@ -20,13 +20,28 @@ bar that runs **green**, turns **amber at 50%** and **red at 85%**.
 └──────────────────────┴─────────────────────────────────────┘
 ```
 
+## Connecting an account
+
+Press **Connect an account**, pick a provider, and the app opens that provider's own CLI
+sign-in in a terminal. You authenticate in the official tool; the app then detects the
+session and starts showing bars.
+
+It works this way on purpose. Anthropic does not issue OAuth credentials to third-party
+applications, and its
+[terms](https://code.claude.com/docs/en/legal-and-compliance) prohibit a third-party app
+from offering a "sign in with Claude" flow or using consumer OAuth tokens. So this app
+**never asks for your password, never runs its own OAuth flow, and never uses API keys** —
+it reads the session the official CLI already wrote, and nothing else.
+
+The accounts panel also lets you rename an account, set its monthly spend cap, add a second
+account of the same provider by pointing at its config folder, and stop tracking one.
+Removing an account only stops this app watching it; the CLI session is left signed in.
+
 ## Subscription authentication only
 
-The app reads the OAuth sessions your CLIs already hold. **No API keys are used or
-accepted**, and metered API accounts are deliberately excluded — they have no usage
-windows to show. Credential files are opened read-only and are never written to:
-refreshing a token behind a CLI's back could invalidate your login, so an expired session
-is reported for you to fix rather than repaired.
+Credential files are opened read-only and are never written to: refreshing a token behind a
+CLI's back could invalidate your login, so an expired session is reported for you to fix
+rather than repaired.
 
 ## Supported providers
 
@@ -51,6 +66,16 @@ zero-green reads as "plenty left" when the truth is "no reading".
 
 [openai/codex#14880]: https://github.com/openai/codex/issues/14880
 
+## The monthly row
+
+Subscriptions have no monthly token quota, so the monthly row tracks **extra-usage credit
+spend** — real money. Providers usually report no cap for it, and without a cap there is no
+denominator, so the row shows the amount spent as text rather than inventing a percentage.
+
+Set a **monthly cap** for an account in the accounts panel and the row becomes a real bar
+measured against it. A cap you set is labelled as yours, so a self-imposed budget is never
+mistaken for a limit the provider enforces.
+
 ## Multiple accounts
 
 Each account is bound to one config directory, and its bars are driven only by data read
@@ -64,7 +89,7 @@ from inside it. Three mechanisms keep a bar attached to its own account:
    different account, the row refuses to show numbers that are not its own.
 
 To watch a second account of the same provider, give it its own config directory and add it
-to the config file (**Edit accounts** in the footer):
+to the config file (**Manage accounts** in the footer):
 
 ```jsonc
 {

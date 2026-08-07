@@ -8,9 +8,11 @@
  */
 
 import { join } from 'node:path';
-import { BrowserWindow, app, ipcMain, nativeTheme, session, shell } from 'electron';
+import { BrowserWindow, app, dialog, ipcMain, nativeTheme, session, shell } from 'electron';
 import { DEFAULT_POLL_SECONDS } from '@shared/config';
-import { IPC, type AppInfo, type UsageSnapshot } from '@shared/ipc';
+import type { Provider } from '@shared/account';
+import { IPC, type AccountsView, type AppInfo, type UsageSnapshot } from '@shared/ipc';
+import { AccountManager } from './accounts';
 import { Collector, mergeDiscovered } from './collector';
 import { ConfigStore } from './config';
 import { discoverAccounts } from './discovery';
@@ -24,6 +26,7 @@ const adapters = createAdapters();
 
 let configStore: ConfigStore;
 let collector: Collector;
+let accountManager: AccountManager;
 let mainWindow: BrowserWindow | null = null;
 
 let latestSnapshot: UsageSnapshot = {
@@ -186,6 +189,41 @@ async function seedAccountsOnFirstRun(): Promise<void> {
   logger.info(`registered ${discovered.length} account(s) on first run`);
 }
 
+function notifyAccountsChanged(): void {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.accountsChanged);
+  }
+}
+
+/**
+ * Delay before a config change triggers a fresh poll.
+ *
+ * Editing accounts must not turn into a burst of requests: a monthly cap is committed on
+ * every blur, and polling the provider on each keystroke-and-tab earned a 429 in testing.
+ * Coalescing the edits into one refresh keeps the app well-behaved without making the UI
+ * feel stale.
+ */
+const ACCOUNT_REFRESH_DEBOUNCE_MS = 1_200;
+let accountRefreshTimer: NodeJS.Timeout | undefined;
+
+/**
+ * Reflects an account change in the UI, refreshing data only when the change can alter it.
+ *
+ * `dataAffected` is false for a rename, which changes nothing the provider reports.
+ */
+function afterAccountChange(dataAffected = true): void {
+  notifyAccountsChanged();
+  if (!dataAffected) return;
+
+  if (accountRefreshTimer !== undefined) clearTimeout(accountRefreshTimer);
+  accountRefreshTimer = setTimeout(() => {
+    accountRefreshTimer = undefined;
+    void runCollection().finally(() => {
+      void scheduleNextPoll();
+    });
+  }, ACCOUNT_REFRESH_DEBOUNCE_MS);
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC.getSnapshot, () => latestSnapshot);
   ipcMain.handle(IPC.refresh, async () => {
@@ -201,17 +239,83 @@ function registerIpcHandlers(): void {
       pollSeconds: config.pollSeconds ?? DEFAULT_POLL_SECONDS,
     };
   });
-  ipcMain.handle(IPC.openConfig, async () => {
-    // Ensure the file exists before asking the OS to open it.
+
+  // Reveals the file in Finder/Explorer rather than opening it. Opening a .json hands it to
+  // whichever editor claims that extension, which is not something the user asked for.
+  ipcMain.handle(IPC.revealConfig, async () => {
     const { config, error } = await configStore.load();
     if (error === undefined) await configStore.save(config);
-    await shell.openPath(configStore.filePath);
+    shell.showItemInFolder(configStore.filePath);
+  });
+
+  ipcMain.handle(IPC.getAccountsView, async (): Promise<AccountsView> => {
+    const [accounts, clis] = await Promise.all([
+      accountManager.listAccounts(),
+      accountManager.cliStatuses(),
+    ]);
+    return {
+      accounts,
+      clis: clis.map(({ provider, command, installed, installUrl }) => ({
+        provider,
+        command,
+        installed,
+        installUrl,
+      })),
+    };
+  });
+
+  ipcMain.handle(IPC.connect, (_event, provider: Provider) => accountManager.connect(provider));
+
+  ipcMain.handle(IPC.detect, async () => {
+    const result = await accountManager.detect();
+    if (result.added.length > 0) afterAccountChange();
+    return result;
+  });
+
+  ipcMain.handle(IPC.rename, async (_event, id: string, label: string) => {
+    const result = await accountManager.rename(id, label);
+    // A name is display-only, so there is nothing to re-fetch.
+    if (result.ok) afterAccountChange(false);
+    return result;
+  });
+
+  ipcMain.handle(IPC.setMonthlyCap, async (_event, id: string, capMinor: number | null) => {
+    const result = await accountManager.setMonthlyCap(id, capMinor);
+    if (result.ok) afterAccountChange();
+    return result;
+  });
+
+  ipcMain.handle(IPC.remove, async (_event, id: string) => {
+    const result = await accountManager.remove(id);
+    if (result.ok) afterAccountChange();
+    return result;
+  });
+
+  ipcMain.handle(IPC.addFromFolder, async (_event, provider: Provider) => {
+    const window = mainWindow;
+    const options = {
+      title: 'Choose the config folder that account is signed in to',
+      properties: ['openDirectory' as const, 'createDirectory' as const],
+    };
+    const picked = window === null
+      ? await dialog.showOpenDialog(options)
+      : await dialog.showOpenDialog(window, options);
+
+    const directory = picked.filePaths[0];
+    if (picked.canceled || directory === undefined) {
+      return { ok: false as const, reason: 'No folder chosen.' };
+    }
+
+    const result = await accountManager.addFromFolder(provider, directory);
+    if (result.ok) afterAccountChange();
+    return result;
   });
 }
 
 app.whenReady().then(async () => {
   configStore = new ConfigStore(join(app.getPath('userData'), 'config.json'));
   collector = new Collector(adapters, configStore, logger);
+  accountManager = new AccountManager(adapters, configStore, logger);
 
   applyContentSecurityPolicy();
   registerIpcHandlers();
@@ -235,5 +339,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   if (pollTimer !== undefined) clearTimeout(pollTimer);
+  if (accountRefreshTimer !== undefined) clearTimeout(accountRefreshTimer);
   inFlight?.abort();
 });

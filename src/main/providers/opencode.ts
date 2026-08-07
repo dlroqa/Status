@@ -136,6 +136,7 @@ export class OpenCodeAdapter implements ProviderAdapter {
       productName: PRODUCT_NAME,
       reauthHint: REAUTH_HINT,
       ...(context.signal ? { signal: context.signal } : {}),
+      ...(context.monthlyCapMinor === undefined ? {} : { monthlyCapMinor: context.monthlyCapMinor }),
     };
 
     const [windows, profile] = await Promise.all([

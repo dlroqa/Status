@@ -60,6 +60,9 @@ export class Collector {
         now,
         logger: this.logger,
         ...(signal ? { signal } : {}),
+        ...(configured.monthlyCapMinor === undefined
+          ? {}
+          : { monthlyCapMinor: configured.monthlyCapMinor }),
       });
     } catch (error) {
       // An adapter throwing is a bug, not an expected condition; surface it rather than

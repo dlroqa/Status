@@ -17,6 +17,14 @@ export const ConfiguredAccountSchema = z
     provider: ProviderSchema,
     label: z.string().min(1),
     configDir: z.string().min(1),
+    /**
+     * Monthly spend cap in minor units (e.g. 2000 = $20.00).
+     *
+     * Subscriptions have no monthly quota, so without a cap there is no denominator and
+     * the monthly row can only report spend as text. Setting one here turns that row into
+     * a real bar. Providers that report their own cap take precedence over this.
+     */
+    monthlyCapMinor: z.number().int().positive().optional(),
   })
   .strict();
 

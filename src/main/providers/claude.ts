@@ -62,6 +62,7 @@ export class ClaudeAdapter implements ProviderAdapter {
       productName: PRODUCT_NAME,
       reauthHint: REAUTH_HINT,
       ...(context.signal ? { signal: context.signal } : {}),
+      ...(context.monthlyCapMinor === undefined ? {} : { monthlyCapMinor: context.monthlyCapMinor }),
     };
 
     // Both calls use the same session; running them together keeps one poll to one round trip each.

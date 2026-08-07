@@ -33,6 +33,11 @@ export interface ProbeContext {
   readonly now: Date;
   readonly logger: Logger;
   readonly signal?: AbortSignal;
+  /**
+   * Monthly spend cap in minor units, when the user has set one. A subscription reports no
+   * monthly quota, so this is what lets the monthly row show a bar instead of bare text.
+   */
+  readonly monthlyCapMinor?: number;
 }
 
 export interface ProviderAdapter {
