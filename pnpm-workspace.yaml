@@ -1,0 +1,8 @@
+# pnpm blocks dependency build scripts by default. Electron's postinstall downloads the
+# platform binary and esbuild's fetches its native binary, so both must run or the app
+# cannot start or build. electron-winstaller is only needed when producing Windows
+# installers on this machine, which the release workflow does on a Windows runner instead.
+allowBuilds:
+  electron: true
+  esbuild: true
+  electron-winstaller: false

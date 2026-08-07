@@ -1,0 +1,82 @@
+/*
+ * Design tokens.
+ *
+ * Dark is the primary theme; the light variant is defined alongside it rather than
+ * inferred, so contrast is checked in both. Every colour is semantic — components never
+ * reference a raw hex value.
+ */
+
+:root {
+  /* Surfaces, dark (primary). Deliberately not pure black: #000 smears on OLED. */
+  --surface-base: #0f172a;
+  --surface-raised: #1e293b;
+  --surface-sunken: #172033;
+  --surface-muted: #272f42;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #b6c2d4;
+  --text-tertiary: #8695ab;
+
+  --border-subtle: #253048;
+  --border-strong: #475569;
+
+  /* Severity. Green until 50%, amber to 85%, red beyond. */
+  --severity-normal: #22c55e;
+  --severity-elevated: #f59e0b;
+  --severity-critical: #ef4444;
+  --severity-unknown: #64748b;
+
+  --accent: #22c55e;
+  --focus-ring: #7dd3fc;
+
+  /* Density 8: a dashboard scale, tighter than a marketing page. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --font-body: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 19px;
+
+  --bar-height: 8px;
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --surface-base: #f6f7f9;
+    --surface-raised: #ffffff;
+    --surface-sunken: #eceff3;
+    --surface-muted: #e2e6ec;
+
+    --text-primary: #0f172a;
+    --text-secondary: #41506a;
+    --text-tertiary: #5c6b83;
+
+    --border-subtle: #dde2e9;
+    --border-strong: #b6c0cd;
+
+    /* Darkened so bar fills keep a 3:1 ratio against a white surface. */
+    --severity-normal: #12813c;
+    --severity-elevated: #a35c04;
+    --severity-critical: #c62828;
+    --severity-unknown: #64748b;
+
+    --accent: #12813c;
+    --focus-ring: #0369a1;
+  }
+}

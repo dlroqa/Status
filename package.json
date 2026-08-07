@@ -1,0 +1,48 @@
+{
+  "name": "ai-usage-monitor",
+  "version": "0.1.0",
+  "description": "Track 5-hour, weekly and monthly usage across your AI subscription accounts",
+  "author": "Ed <erocaide@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/erocaide/ai-usage-monitor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/erocaide/ai-usage-monitor.git"
+  },
+  "desktopName": "ai-usage-monitor.desktop",
+  "private": true,
+  "main": "./out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "npm run typecheck && npm run test && electron-vite build",
+    "build:linux": "npm run build && electron-builder --linux",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@fontsource/fira-code": "^5.3.0",
+    "@fontsource/fira-sans": "^5.3.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "33.4.11",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "lucide-react": "^1.29.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "simple-icons": "^16.28.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "vitest": "^4.1.10"
+  }
+}
