@@ -99,25 +99,32 @@ why the release runs as a three-OS GitHub Actions matrix.
 
 ### First launch on macOS
 
-Releases are **ad-hoc signed, not notarised** — they carry no Apple Developer identity,
-because that needs a paid certificate. Ad-hoc signing is what makes the app runnable at
-all: macOS refuses to execute unsigned arm64 code outright, which is why a truly unsigned
-build shows a crossed-out icon in Finder instead of a prompt.
+The app is **ad-hoc signed but not notarised** — notarisation needs a paid Apple Developer
+certificate. Ad-hoc signing is what makes it runnable at all: macOS refuses to execute
+unsigned arm64 code outright. Gatekeeper is a separate gate, and because the download is
+quarantined and unnotarised, it blocks the first launch. One deliberate action clears it,
+permanently.
 
-Gatekeeper is a separate gate. Because the download is quarantined and the app is not
-notarised, the first launch needs one deliberate action:
+macOS 15 (Sequoia) **removed the old Control-click → Open shortcut**, so on current macOS:
 
-**Right-click the app in Applications and choose Open**, then confirm. macOS remembers the
-choice, so this is a one-time step. (Double-clicking will refuse — use Open from the
-right-click menu.)
+1. Open the app once and let it be refused (`"AI Usage Monitor" Not Opened`).
+2. Go to **System Settings → Privacy & Security**, scroll to **Security**.
+3. Click **Open Anyway** next to AI Usage Monitor, then confirm.
 
-If macOS still refuses, clear the quarantine flag it set on download:
+On macOS 14 and earlier, right-click the app and choose **Open** instead.
+
+Either way, macOS remembers the decision and later launches are normal.
+
+**Or do it in one command**, which works on every macOS version — it strips the quarantine
+flag that Finder attached when the file was downloaded:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/AI Usage Monitor.app"
 ```
 
-Download the build matching your Mac: `arm64` for Apple Silicon, the plain build for Intel.
+There is one download for macOS. It is a **universal** build containing both `arm64` and
+`x86_64`, so it runs natively on Apple Silicon (M1, M2, M3, M4) and on Intel, and there is
+no architecture to pick wrongly. It requires macOS 11 Big Sur or later.
 
 > **Windows** shows a SmartScreen warning for the same reason — choose **More info →
 > Run anyway**. Signing and notarising both platforms needs certificates; the build is

@@ -78,14 +78,23 @@ jobs:
           files: artifacts/*
           draft: false
           body: |
-            Builds are ad-hoc signed but **not notarised**, because notarisation needs a
-            paid Apple Developer certificate.
+            One **universal** macOS download containing both arm64 and x86_64: it runs
+            natively on Apple Silicon (M1/M2/M3/M4) and Intel. Requires macOS 11+.
 
-            **macOS first launch:** right-click the app in Applications and choose
-            **Open**, then confirm. Double-clicking will refuse. macOS remembers the
-            choice. If it still refuses:
-            `xattr -dr com.apple.quarantine "/Applications/AI Usage Monitor.app"`
+            Builds are ad-hoc signed but **not notarised** (that needs a paid Apple
+            certificate), so Gatekeeper blocks the first launch. macOS 15 Sequoia removed
+            the old Control-click shortcut, so:
 
-            Pick `arm64` for Apple Silicon, the plain build for Intel.
+            1. Open the app once and let it be refused.
+            2. **System Settings → Privacy & Security → Security**.
+            3. Click **Open Anyway**, then confirm.
+
+            On macOS 14 and earlier, right-click the app and choose **Open**.
+
+            Or clear it in one command, which works on every version:
+
+            ```
+            xattr -dr com.apple.quarantine "/Applications/AI Usage Monitor.app"
+            ```
 
             **Windows:** SmartScreen will warn — choose **More info → Run anyway**.
