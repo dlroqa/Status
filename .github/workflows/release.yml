@@ -67,7 +67,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
-          draft: true
+          draft: false
           body: |
             Unsigned first release. macOS shows a Gatekeeper prompt and Windows a
             SmartScreen warning until signing certificates are configured.

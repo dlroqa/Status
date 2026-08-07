@@ -1,6 +1,6 @@
-appId: com.erocaide.ai-usage-monitor
+appId: io.github.dlroqa.ai-usage-monitor
 productName: AI Usage Monitor
-copyright: Copyright © 2026
+copyright: Copyright © 2026 Ed (@dlroqa)
 
 directories:
   output: release

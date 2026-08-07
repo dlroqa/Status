@@ -4,10 +4,10 @@
   "description": "Track 5-hour, weekly and monthly usage across your AI subscription accounts",
   "author": "Ed <erocaide@gmail.com>",
   "license": "MIT",
-  "homepage": "https://github.com/erocaide/ai-usage-monitor",
+  "homepage": "https://github.com/dlroqa/Status",
   "repository": {
     "type": "git",
-    "url": "https://github.com/erocaide/ai-usage-monitor.git"
+    "url": "git+https://github.com/dlroqa/Status.git"
   },
   "desktopName": "ai-usage-monitor.desktop",
   "private": true,
@@ -44,5 +44,8 @@
     "typescript": "^5.7.2",
     "vite": "^6.0.0",
     "vitest": "^4.1.10"
+  },
+  "bugs": {
+    "url": "https://github.com/dlroqa/Status/issues"
   }
 }
