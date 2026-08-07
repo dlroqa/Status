@@ -44,11 +44,16 @@ nsis:
   deleteAppDataOnUninstall: false
 
 mac:
+  # A single universal binary carrying both arm64 and x86_64 slices. It runs natively on
+  # every Apple Silicon Mac (M1 through M4) and on Intel, which removes the failure mode
+  # where someone downloads the Intel build onto an Apple Silicon Mac and gets a crossed-out
+  # icon because Rosetta 2 is not installed. It costs download size and is worth it: there
+  # is no architecture for the user to choose wrongly.
   target:
     - target: dmg
-      arch: [x64, arm64]
+      arch: [universal]
     - target: zip
-      arch: [x64, arm64]
+      arch: [universal]
   category: public.app-category.developer-tools
   icon: build/icon.png
   # Ad-hoc signing. Without this, electron-builder finds no Developer ID certificate and

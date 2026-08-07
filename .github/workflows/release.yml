@@ -46,6 +46,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec electron-vite build
       - run: ${{ matrix.command }}
+
+      # v0.1.0 shipped a macOS build that could not launch and the pipeline never noticed,
+      # because a green electron-builder run says nothing about whether the bundle is
+      # actually loadable. This verifies the signature, the entitlements the hardened
+      # runtime needs, and that the app survives launch on a real Mac.
+      - name: Verify macOS bundle
+        if: runner.os == 'macOS'
+        run: ./scripts/verify-macos-app.sh release
+
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.os }}
