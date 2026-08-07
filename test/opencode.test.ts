@@ -20,7 +20,7 @@ describe('classifyEntries', () => {
 
   it('separates API keys out, since this app tracks subscriptions only', () => {
     const { subscriptions, apiKeyProviders } = classifyEntries({
-      openai: { type: 'api', key: 'sk-should-never-be-used' },
+      openai: { type: 'api', key: 'placeholder-api-key-value' },
       anthropic: { type: 'oauth', access: 'token' },
     });
 

@@ -8,12 +8,15 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Provider } from '../shared/account';
+import type { MenuBarSetting } from '../shared/menubar';
 import {
   IPC,
   type AccountsView,
   type ActionResult,
   type AppInfo,
   type DetectResult,
+  type RemovalOutcome,
+  type SignInOutcome,
   type UsageMonitorBridge,
   type UsageSnapshot,
 } from '../shared/ipc';
@@ -43,9 +46,17 @@ const bridge: UsageMonitorBridge = {
   remove: (id: string) => ipcRenderer.invoke(IPC.remove, id) as Promise<ActionResult>,
   addFromFolder: (provider: Provider) =>
     ipcRenderer.invoke(IPC.addFromFolder, provider) as Promise<ActionResult>,
+  signIn: (provider: Provider, installApproved: boolean) =>
+    ipcRenderer.invoke(IPC.signIn, provider, installApproved) as Promise<SignInOutcome>,
+  cancelSignIn: () => ipcRenderer.invoke(IPC.cancelSignIn) as Promise<void>,
+  setMenuBar: (setting: MenuBarSetting) =>
+    ipcRenderer.invoke(IPC.setMenuBar, setting) as Promise<ActionResult>,
+  showMainWindow: () => ipcRenderer.invoke(IPC.showMainWindow) as Promise<void>,
+  removeAllData: () => ipcRenderer.invoke(IPC.removeAllData) as Promise<RemovalOutcome>,
 
   onSnapshot: (listener) => subscribe(IPC.snapshot, listener as never),
   onAccountsChanged: (listener) => subscribe(IPC.accountsChanged, listener as never),
+  onSignInProgress: (listener) => subscribe(IPC.signInProgress, listener as never),
 };
 
 contextBridge.exposeInMainWorld('usageMonitor', bridge);

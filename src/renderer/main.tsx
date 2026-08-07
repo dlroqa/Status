@@ -12,12 +12,16 @@ import '@fontsource/fira-code/600.css';
 import './styles/tokens.css';
 import './styles/app.css';
 import { App } from './App';
+import { Popover } from './Popover';
 
 const container = document.getElementById('root');
 if (container === null) throw new Error('root element is missing from index.html');
 
+// The menu-bar popover is the same bundle rendered differently, so both views share one
+// build and cannot drift apart.
+const isPopover = new URLSearchParams(window.location.search).get('view') === 'popover';
+if (isPopover) document.documentElement.dataset['view'] = 'popover';
+
 createRoot(container).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <StrictMode>{isPopover ? <Popover /> : <App />}</StrictMode>,
 );

@@ -9,6 +9,7 @@
  * the user's login, so an expired session is reported for the user to fix, not repaired.
  */
 
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { makeAccountId } from '@shared/account';
 import { allWindows, errored, notConnected, type Measurement } from '@shared/window';
@@ -42,7 +43,13 @@ interface CachedIdentity {
 export class ClaudeAdapter implements ProviderAdapter {
   readonly provider = 'claude' as const;
 
-  /** Keyed by access token: a new token means a possibly different account. */
+  /**
+   * Keyed by a digest of the access token, never the token itself.
+   *
+   * A new token still misses the cache, because a different token digests differently — but
+   * Map keys are held strongly, so keying on the raw value would keep a live credential in
+   * the heap for the lifetime of the process.
+   */
   private readonly identityCache = new Map<string, CachedIdentity>();
 
   defaultConfigDirs(): readonly string[] {
@@ -79,7 +86,8 @@ export class ClaudeAdapter implements ProviderAdapter {
     subscriptionType: string | undefined,
     context: AnthropicRequestContext,
   ): Promise<AccountIdentity | null> {
-    const cached = this.identityCache.get(accessToken);
+    const cacheKey = digestOf(accessToken);
+    const cached = this.identityCache.get(cacheKey);
     if (cached !== undefined && cached.expiresAtMs > context.now.getTime()) {
       return cached.identity;
     }
@@ -91,12 +99,17 @@ export class ClaudeAdapter implements ProviderAdapter {
     }
 
     const identity = toIdentity(profile, subscriptionType);
-    this.identityCache.set(accessToken, {
+    this.identityCache.set(cacheKey, {
       identity,
       expiresAtMs: context.now.getTime() + IDENTITY_TTL_MS,
     });
     return identity;
   }
+}
+
+/** One-way digest used purely as a cache key, so no token is retained in memory. */
+function digestOf(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 function toIdentity(profile: AnthropicProfile, subscriptionType: string | undefined): AccountIdentity {

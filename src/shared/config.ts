@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { PROVIDERS } from './account';
+import { MENU_BAR_SOURCES } from './menubar';
 
 export const ProviderSchema = z.enum(PROVIDERS);
 
@@ -37,18 +38,39 @@ export type ConfiguredAccount = z.infer<typeof ConfiguredAccountSchema>;
 export const MIN_POLL_SECONDS = 30;
 export const DEFAULT_POLL_SECONDS = 60;
 
+/**
+ * What the menu-bar item tracks. `closest` follows whichever account is nearest its limit,
+ * which is the figure that matters when several accounts are connected; `chosen` pins it to
+ * one account.
+ */
+export const MenuBarSchema = z
+  .object({
+    source: z.enum(MENU_BAR_SOURCES).default('closest'),
+    accountId: z.string().min(3).optional(),
+  })
+  .strict();
+
 export const ConfigSchema = z
   .object({
     version: z.literal(1),
     pollSeconds: z.number().int().min(MIN_POLL_SECONDS).max(3600).default(DEFAULT_POLL_SECONDS),
     accounts: z.array(ConfiguredAccountSchema).default([]),
+    menuBar: MenuBarSchema.default({ source: 'closest' }),
   })
   .strict();
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
 
+/**
+ * What callers may hand to `save`: fields carrying a default may be omitted, because saving
+ * validates and fills them in. Requiring the fully-defaulted shape everywhere would push
+ * that busywork onto every call site.
+ */
+export type AppConfigInput = z.input<typeof ConfigSchema>;
+
 export const DEFAULT_CONFIG: AppConfig = {
   version: 1,
   pollSeconds: DEFAULT_POLL_SECONDS,
   accounts: [],
+  menuBar: { source: 'closest' },
 };

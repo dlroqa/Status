@@ -41,7 +41,9 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  deleteAppDataOnUninstall: false
+  # Removing the app should not leave its config and install id behind. Provider CLI
+  # sessions live elsewhere and are untouched.
+  deleteAppDataOnUninstall: true
 
 mac:
   # A single universal binary carrying both arm64 and x86_64 slices. It runs natively on

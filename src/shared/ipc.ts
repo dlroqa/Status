@@ -6,6 +6,7 @@
  */
 
 import type { AccountUsage, Provider } from './account';
+import type { MenuBarSetting } from './menubar';
 
 export const IPC = {
   /** Renderer -> main: return the latest snapshot immediately, without forcing a poll. */
@@ -35,6 +36,21 @@ export const IPC = {
   addFromFolder: 'accounts:add-from-folder',
   /** Main -> renderer: the account list or CLI availability changed. */
   accountsChanged: 'accounts:changed',
+
+  /** Renderer -> main: install if needed, hand off to the browser, then detect the session. */
+  signIn: 'accounts:sign-in',
+  /** Renderer -> main: abort an in-flight sign-in. */
+  cancelSignIn: 'accounts:cancel-sign-in',
+  /** Main -> renderer: sign-in progress. */
+  signInProgress: 'accounts:sign-in-progress',
+
+  /** Renderer -> main: change what the menu-bar item tracks. */
+  setMenuBar: 'menubar:set',
+  /** Renderer -> main (popover): bring up the full window. */
+  showMainWindow: 'window:show-main',
+
+  /** Renderer -> main: delete everything this app created. */
+  removeAllData: 'app:remove-all-data',
 } as const;
 
 export interface UsageSnapshot {
@@ -51,6 +67,11 @@ export interface AppInfo {
   readonly version: string;
   readonly configPath: string;
   readonly pollSeconds: number;
+  /** Random, per-installation, never transmitted. Shown so it is inspectable. */
+  readonly installId: string;
+  /** Lets the UI adapt to the platform without sniffing the user agent. */
+  readonly platform: NodeJS.Platform;
+  readonly menuBar: MenuBarSetting;
 }
 
 /** Whether a provider's CLI is available, and how to get it if not. */
@@ -73,6 +94,40 @@ export interface ManagedAccount {
 export interface AccountsView {
   readonly accounts: readonly ManagedAccount[];
   readonly clis: readonly ProviderCliStatus[];
+}
+
+/** Stages a sign-in moves through, so the panel can show what is happening. */
+export const SIGN_IN_PHASES = ['checking', 'installing', 'awaiting-approval', 'detecting', 'done', 'error'] as const;
+export type SignInPhase = (typeof SIGN_IN_PHASES)[number];
+
+export interface SignInProgress {
+  readonly provider: Provider;
+  readonly phase: SignInPhase;
+  /** Already redacted. Never contains a token or an authorization URL. */
+  readonly message: string;
+}
+
+/**
+ * Returned when the provider's client is missing and the user has not yet approved
+ * installing it. `command` is the exact vendor command that would run.
+ */
+export interface InstallConsent {
+  readonly provider: Provider;
+  readonly command: string;
+}
+
+/** What a sign-in attempt returned. */
+export type SignInOutcome =
+  | { readonly ok: true; readonly detail: string }
+  /** The provider's client is missing; show `consent.command` and ask before installing. */
+  | { readonly ok: false; readonly consent: InstallConsent }
+  | { readonly ok: false; readonly reason: string };
+
+export interface RemovalOutcome {
+  readonly removed: readonly string[];
+  readonly failed: readonly { readonly path: string; readonly reason: string }[];
+  /** Commands the user can run themselves to sign out; this app does not run them. */
+  readonly signOutCommands: readonly string[];
 }
 
 /** Result of an action that can fail for reasons the user needs to read. */
@@ -98,9 +153,16 @@ export interface UsageMonitorBridge {
   setMonthlyCap(id: string, capMinor: number | null): Promise<ActionResult>;
   remove(id: string): Promise<ActionResult>;
   addFromFolder(provider: Provider): Promise<ActionResult>;
+  signIn(provider: Provider, installApproved: boolean): Promise<SignInOutcome>;
+  cancelSignIn(): Promise<void>;
+  setMenuBar(setting: MenuBarSetting): Promise<ActionResult>;
+  showMainWindow(): Promise<void>;
+  removeAllData(): Promise<RemovalOutcome>;
 
   /** Subscribes to pushed snapshots; returns an unsubscribe function. */
   onSnapshot(listener: (snapshot: UsageSnapshot) => void): () => void;
   /** Subscribes to account-list changes; returns an unsubscribe function. */
   onAccountsChanged(listener: () => void): () => void;
+  /** Subscribes to sign-in progress; returns an unsubscribe function. */
+  onSignInProgress(listener: (progress: SignInProgress) => void): () => void;
 }

@@ -8,7 +8,7 @@
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { ConfigSchema, DEFAULT_CONFIG, type AppConfig } from '@shared/config';
+import { ConfigSchema, DEFAULT_CONFIG, type AppConfig, type AppConfigInput } from '@shared/config';
 import { messageOf } from './scope';
 
 export interface LoadResult {
@@ -48,7 +48,7 @@ export class ConfigStore {
   }
 
   /** Writes via a temporary file and rename so an interrupted write cannot truncate the config. */
-  async save(config: AppConfig): Promise<void> {
+  async save(config: AppConfigInput): Promise<void> {
     const validated = ConfigSchema.parse(config);
     await mkdir(dirname(this.filePath), { recursive: true });
     const temporary = `${this.filePath}.tmp`;

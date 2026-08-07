@@ -8,22 +8,34 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ExternalLink, FolderOpen, Loader2, LogIn, RefreshCcw, Trash2, X } from 'lucide-react';
+import { FolderOpen, Loader2, RefreshCcw, Trash2, X } from 'lucide-react';
 import { PROVIDER_LABELS, PROVIDERS, type Provider } from '@shared/account';
-import type { AccountsView, ManagedAccount, ProviderCliStatus } from '@shared/ipc';
+import type { AccountsView, InstallConsent, ManagedAccount, SignInProgress } from '@shared/ipc';
+import type { MenuBarSetting } from '@shared/menubar';
+import { ConnectRow } from './ConnectRow';
 import { ProviderMark } from './ProviderMark';
 
 interface AccountsPanelProps {
   readonly onClose: () => void;
   readonly configPath: string | undefined;
+  readonly installId: string | undefined;
+  readonly menuBar: MenuBarSetting | undefined;
 }
 
 type Notice = { readonly tone: 'ok' | 'error'; readonly text: string } | null;
 
-export function AccountsPanel({ onClose, configPath }: AccountsPanelProps): React.ReactElement {
+export function AccountsPanel({
+  onClose,
+  configPath,
+  installId,
+  menuBar,
+}: AccountsPanelProps): React.ReactElement {
   const [view, setView] = useState<AccountsView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
+  const [consents, setConsents] = useState<Record<string, InstallConsent | undefined>>({});
+  const [progress, setProgress] = useState<Record<string, SignInProgress | undefined>>({});
+  const [confirmingWipe, setConfirmingWipe] = useState(false);
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -33,7 +45,14 @@ export function AccountsPanel({ onClose, configPath }: AccountsPanelProps): Reac
 
   useEffect(() => {
     void reload();
-    return window.usageMonitor.onAccountsChanged(() => void reload());
+    const stopAccounts = window.usageMonitor.onAccountsChanged(() => void reload());
+    const stopProgress = window.usageMonitor.onSignInProgress((update) =>
+      setProgress((current) => ({ ...current, [update.provider]: update })),
+    );
+    return () => {
+      stopAccounts();
+      stopProgress();
+    };
   }, [reload]);
 
   // Escape closes, and focus starts inside the dialog so keyboard users are not stranded
@@ -67,16 +86,17 @@ export function AccountsPanel({ onClose, configPath }: AccountsPanelProps): Reac
     [],
   );
 
-  const connect = (provider: Provider): void => {
-    void run(`connect:${provider}`, async () => {
-      const result = await window.usageMonitor.connect(provider);
-      if (result.ok) {
-        return {
-          ok: true,
-          detail: `Sign in to ${PROVIDER_LABELS[provider]} in the terminal that just opened, then press "Detect accounts".`,
-        };
+  const signIn = (provider: Provider, installApproved: boolean): void => {
+    setConsents((current) => ({ ...current, [provider]: undefined }));
+    void run(`signin:${provider}`, async () => {
+      const result = await window.usageMonitor.signIn(provider, installApproved);
+      if (result.ok) return { ok: true, detail: result.detail };
+      if ('consent' in result) {
+        // Not an error: the client is missing and the user has not approved installing it.
+        setConsents((current) => ({ ...current, [provider]: result.consent }));
+        return { ok: true };
       }
-      return result;
+      return { ok: false, reason: result.reason };
     });
   };
 
@@ -125,12 +145,17 @@ export function AccountsPanel({ onClose, configPath }: AccountsPanelProps): Reac
                   key={provider}
                   provider={provider}
                   status={view?.clis.find((cli) => cli.provider === provider)}
-                  busy={busy === `connect:${provider}`}
-                  onConnect={() => connect(provider)}
+                  busy={busy === `signin:${provider}`}
+                  folderBusy={busy === `folder:${provider}`}
+                  consent={consents[provider]}
+                  progress={progress[provider]}
+                  onSignIn={() => signIn(provider, false)}
+                  onApproveInstall={() => signIn(provider, true)}
+                  onDismissConsent={() => setConsents((c) => ({ ...c, [provider]: undefined }))}
+                  onCancel={() => void window.usageMonitor.cancelSignIn()}
                   onAddFolder={() =>
                     void run(`folder:${provider}`, () => window.usageMonitor.addFromFolder(provider))
                   }
-                  folderBusy={busy === `folder:${provider}`}
                 />
               ))}
             </ul>
@@ -165,11 +190,110 @@ export function AccountsPanel({ onClose, configPath }: AccountsPanelProps): Reac
               </ul>
             )}
           </section>
+
+          <section className="panel__section">
+            <h3>Menu bar</h3>
+            <p className="panel__hint">
+              What the status item in the menu bar tracks.
+            </p>
+            <div className="menubar-choice">
+              <label className="radio">
+                <input
+                  type="radio"
+                  name="menubar-source"
+                  checked={menuBar?.source !== 'chosen'}
+                  onChange={() => void run('menubar', () => window.usageMonitor.setMenuBar({ source: 'closest' }))}
+                />
+                <span>
+                  <strong>Closest to its limit</strong>
+                  <em>Whichever account will run out first, across all windows.</em>
+                </span>
+              </label>
+              <label className="radio">
+                <input
+                  type="radio"
+                  name="menubar-source"
+                  checked={menuBar?.source === 'chosen'}
+                  disabled={view === null || view.accounts.length === 0}
+                  onChange={() =>
+                    void run('menubar', () =>
+                      window.usageMonitor.setMenuBar({
+                        source: 'chosen',
+                        ...(view?.accounts[0] === undefined ? {} : { accountId: menuBar?.accountId ?? view.accounts[0].id }),
+                      }),
+                    )
+                  }
+                />
+                <span>
+                  <strong>A chosen account</strong>
+                  <em>Always show one account&apos;s 5-hour usage.</em>
+                </span>
+              </label>
+
+              {menuBar?.source === 'chosen' && view !== null && view.accounts.length > 0 && (
+                <select
+                  className="input"
+                  aria-label="Account shown in the menu bar"
+                  value={menuBar.accountId ?? view.accounts[0]?.id ?? ''}
+                  onChange={(event) =>
+                    void run('menubar', () =>
+                      window.usageMonitor.setMenuBar({ source: 'chosen', accountId: event.target.value }),
+                    )
+                  }
+                >
+                  {view.accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </section>
+
+          <section className="panel__section">
+            <h3>Remove app data</h3>
+            {confirmingWipe ? (
+              <div className="danger">
+                <p className="danger__text">
+                  This deletes everything this app created: your account list, monthly caps and
+                  this installation&apos;s id. Your Claude, ChatGPT and OpenCode sessions stay
+                  signed in — this app did not create them. To sign out of those, run{' '}
+                  <code>claude auth logout</code>, <code>codex logout</code> or{' '}
+                  <code>opencode auth logout</code> yourself.
+                </p>
+                <div className="consent__actions">
+                  <button
+                    type="button"
+                    className="button button--danger"
+                    onClick={() =>
+                      void run('wipe', async () => {
+                        const report = await window.usageMonitor.removeAllData();
+                        setConfirmingWipe(false);
+                        return report.failed.length === 0
+                          ? { ok: true, detail: `Removed ${report.removed.length} item(s). Provider sessions were left signed in.` }
+                          : { ok: false, reason: `Could not remove: ${report.failed.map((f) => f.path).join(', ')}` };
+                      })
+                    }
+                  >
+                    <Trash2 size={13} aria-hidden="true" /> Remove everything
+                  </button>
+                  <button type="button" className="button button--quiet" onClick={() => setConfirmingWipe(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="button button--quiet" onClick={() => setConfirmingWipe(true)}>
+                <Trash2 size={13} aria-hidden="true" /> Remove all app data…
+              </button>
+            )}
+          </section>
         </div>
 
         <footer className="panel__foot">
-          <span className="panel__path" title={configPath}>
-            {configPath ?? ''}
+          <span className="panel__path" title={`${configPath ?? ''}\ninstall id: ${installId ?? 'unknown'}`}>
+            {installId === undefined ? (configPath ?? '') : `install ${installId.slice(0, 8)} · ${configPath ?? ''}`}
           </span>
           <button type="button" className="button button--quiet" onClick={() => void window.usageMonitor.revealConfig()}>
             <FolderOpen size={13} aria-hidden="true" /> Show config file
@@ -177,63 +301,6 @@ export function AccountsPanel({ onClose, configPath }: AccountsPanelProps): Reac
         </footer>
       </div>
     </div>
-  );
-}
-
-function ConnectRow({
-  provider,
-  status,
-  busy,
-  folderBusy,
-  onConnect,
-  onAddFolder,
-}: {
-  readonly provider: Provider;
-  readonly status: ProviderCliStatus | undefined;
-  readonly busy: boolean;
-  readonly folderBusy: boolean;
-  readonly onConnect: () => void;
-  readonly onAddFolder: () => void;
-}): React.ReactElement {
-  const installed = status?.installed === true;
-
-  return (
-    <li className="row">
-      <ProviderMark provider={provider} />
-      <div className="row__main">
-        <div className="row__title">{PROVIDER_LABELS[provider]}</div>
-        <div className="row__sub">
-          {status === undefined
-            ? 'checking…'
-            : installed
-              ? `${status.command} is installed`
-              : `${status.command} is not installed`}
-        </div>
-      </div>
-      <div className="row__actions">
-        {installed ? (
-          <>
-            <button type="button" className="button button--primary" onClick={onConnect} disabled={busy}>
-              {busy ? <Loader2 size={13} className="spin" aria-hidden="true" /> : <LogIn size={13} aria-hidden="true" />}
-              Connect
-            </button>
-            <button
-              type="button"
-              className="button button--quiet"
-              onClick={onAddFolder}
-              disabled={folderBusy}
-              title="Add a second account of this provider by pointing at the config folder it is signed in to"
-            >
-              <FolderOpen size={13} aria-hidden="true" /> Add folder…
-            </button>
-          </>
-        ) : (
-          <a className="button button--quiet" href={status?.installUrl ?? '#'} target="_blank" rel="noreferrer noopener">
-            <ExternalLink size={13} aria-hidden="true" /> Install
-          </a>
-        )}
-      </div>
-    </li>
   );
 }
 

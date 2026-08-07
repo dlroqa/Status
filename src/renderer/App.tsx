@@ -22,7 +22,12 @@ export function App(): React.ReactElement {
   useEffect(() => {
     const bridge = window.usageMonitor;
     void bridge.getSnapshot().then(setSnapshot);
-    void bridge.getAppInfo().then(setAppInfo);
+    void bridge.getAppInfo().then((info) => {
+      setAppInfo(info);
+      // Drives the macOS-only traffic-light inset in CSS. Taken from the main process
+      // rather than sniffed from the user agent, which lies under emulation.
+      document.documentElement.dataset['platform'] = info.platform;
+    });
     return bridge.onSnapshot(setSnapshot);
   }, []);
 
@@ -46,15 +51,18 @@ export function App(): React.ReactElement {
   return (
     <div className="app">
       <header className="toolbar">
+        {/* Three columns so the title is optically centred whatever the buttons weigh. */}
+        <div className="toolbar__side" />
         <h1 className="toolbar__title">AI Usage Monitor</h1>
-        <div className="toolbar__spacer" />
-        <span className="toolbar__status" aria-live="polite">
-          {snapshot.refreshing ? 'refreshing…' : hasLoaded && fetchedAgo !== undefined ? `updated ${fetchedAgo}` : ''}
-        </span>
-        <button type="button" onClick={refresh} disabled={snapshot.refreshing}>
-          <RefreshCw size={13} className={snapshot.refreshing ? 'spin' : undefined} aria-hidden="true" />
-          Refresh
-        </button>
+        <div className="toolbar__side toolbar__side--end">
+          <span className="toolbar__status" aria-live="polite">
+            {snapshot.refreshing ? 'refreshing…' : hasLoaded && fetchedAgo !== undefined ? `updated ${fetchedAgo}` : ''}
+          </span>
+          <button type="button" onClick={refresh} disabled={snapshot.refreshing}>
+            <RefreshCw size={13} className={snapshot.refreshing ? 'spin' : undefined} aria-hidden="true" />
+            Refresh
+          </button>
+        </div>
       </header>
 
       {snapshot.configError !== undefined && (
@@ -94,7 +102,12 @@ export function App(): React.ReactElement {
       </footer>
 
       {accountsOpen && (
-        <AccountsPanel onClose={() => setAccountsOpen(false)} configPath={appInfo?.configPath} />
+        <AccountsPanel
+          onClose={() => setAccountsOpen(false)}
+          configPath={appInfo?.configPath}
+          installId={appInfo?.installId}
+          menuBar={appInfo?.menuBar}
+        />
       )}
     </div>
   );

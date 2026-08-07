@@ -11,9 +11,23 @@ import { join } from 'node:path';
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, session, shell } from 'electron';
 import { DEFAULT_POLL_SECONDS } from '@shared/config';
 import type { Provider } from '@shared/account';
-import { IPC, type AccountsView, type AppInfo, type UsageSnapshot } from '@shared/ipc';
+import {
+  IPC,
+  type AccountsView,
+  type AppInfo,
+  type RemovalOutcome,
+  type SignInOutcome,
+  type SignInProgress,
+  type UsageSnapshot,
+} from '@shared/ipc';
+import type { MenuBarSetting } from '@shared/menubar';
+import { selectMenuBarDisplay } from '@shared/menubar';
 import { AccountManager } from './accounts';
+import { PROVIDER_SIGN_OUT_COMMANDS, removeAllAppData } from './app-data';
 import { Collector, mergeDiscovered } from './collector';
+import { InstallIdentity } from './install-id';
+import { SignInService } from './signin';
+import { MenuBar, rendererFilePath } from './tray';
 import { ConfigStore } from './config';
 import { discoverAccounts } from './discovery';
 import { createLogger } from './logger';
@@ -27,6 +41,9 @@ const adapters = createAdapters();
 let configStore: ConfigStore;
 let collector: Collector;
 let accountManager: AccountManager;
+let installIdentity: InstallIdentity;
+let signInService: SignInService;
+let menuBar: MenuBar | undefined;
 let mainWindow: BrowserWindow | null = null;
 
 let latestSnapshot: UsageSnapshot = {
@@ -59,6 +76,9 @@ function createWindow(): void {
     backgroundColor: backgroundForTheme(),
     title: 'AI Usage Monitor',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // Centres the traffic lights against the app's own 48px header rather than leaving them
+    // at the default offset, which sits high and clips the first row of content.
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 16 } } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
@@ -126,9 +146,17 @@ function applyContentSecurityPolicy(): void {
 
 function publish(snapshot: UsageSnapshot): void {
   latestSnapshot = snapshot;
-  if (mainWindow !== null && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC.snapshot, snapshot);
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(IPC.snapshot, snapshot);
   }
+  void refreshMenuBar(snapshot);
+}
+
+/** Redraws the status item from the same snapshot the windows render. */
+async function refreshMenuBar(snapshot: UsageSnapshot): Promise<void> {
+  if (menuBar === undefined) return;
+  const { config } = await configStore.load();
+  menuBar.render(selectMenuBarDisplay(snapshot.accounts, config.menuBar));
 }
 
 async function runCollection(): Promise<UsageSnapshot> {
@@ -237,6 +265,9 @@ function registerIpcHandlers(): void {
       version: app.getVersion(),
       configPath: configStore.filePath,
       pollSeconds: config.pollSeconds ?? DEFAULT_POLL_SECONDS,
+      installId: await installIdentity.read(),
+      platform: process.platform,
+      menuBar: config.menuBar,
     };
   });
 
@@ -291,6 +322,71 @@ function registerIpcHandlers(): void {
     return result;
   });
 
+  ipcMain.handle(IPC.signIn, async (_event, provider: Provider, installApproved: boolean): Promise<SignInOutcome> => {
+    const send = (progress: SignInProgress): void => {
+      if (mainWindow !== null && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC.signInProgress, progress);
+      }
+    };
+
+    const result = await signInService.signIn(
+      { provider, installApproved },
+      {
+        onProgress: send,
+        // The URL carries an authorization code; it goes to the browser and nowhere else.
+        openExternal: (url) => shell.openExternal(url),
+      },
+    );
+
+    if (result.ok) {
+      afterAccountChange();
+      return { ok: true, detail: result.detail };
+    }
+    if (result.needsInstallApproval === true) {
+      return { ok: false, consent: { provider, command: result.reason } };
+    }
+    return { ok: false, reason: result.reason };
+  });
+
+  ipcMain.handle(IPC.cancelSignIn, () => {
+    signInService.cancel();
+  });
+
+  ipcMain.handle(IPC.setMenuBar, async (_event, setting: MenuBarSetting) => {
+    const { config, error } = await configStore.load();
+    if (error !== undefined) return { ok: false as const, reason: error };
+    await configStore.save({ ...config, menuBar: setting });
+    await refreshMenuBar(latestSnapshot);
+    notifyAccountsChanged();
+    return { ok: true as const };
+  });
+
+  ipcMain.handle(IPC.showMainWindow, () => {
+    menuBar?.hidePopover();
+    if (mainWindow === null || mainWindow.isDestroyed()) createWindow();
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+
+  ipcMain.handle(IPC.removeAllData, async (): Promise<RemovalOutcome> => {
+    const report = await removeAllAppData({
+      files: [
+        configStore.filePath,
+        `${configStore.filePath}.tmp`,
+        installIdentity.filePath,
+        `${installIdentity.filePath}.tmp`,
+      ],
+      clearBrowserStorage: () => session.defaultSession.clearStorageData(),
+      logger,
+    });
+
+    // Reflect the emptied state immediately rather than leaving stale rows on screen.
+    await runCollection();
+    notifyAccountsChanged();
+
+    return { ...report, signOutCommands: PROVIDER_SIGN_OUT_COMMANDS };
+  });
+
   ipcMain.handle(IPC.addFromFolder, async (_event, provider: Provider) => {
     const window = mainWindow;
     const options = {
@@ -316,10 +412,22 @@ app.whenReady().then(async () => {
   configStore = new ConfigStore(join(app.getPath('userData'), 'config.json'));
   collector = new Collector(adapters, configStore, logger);
   accountManager = new AccountManager(adapters, configStore, logger);
+  installIdentity = new InstallIdentity(join(app.getPath('userData'), 'install-id'));
+  signInService = new SignInService(accountManager, logger);
 
   applyContentSecurityPolicy();
   registerIpcHandlers();
   createWindow();
+
+  menuBar = new MenuBar({
+    preloadPath: join(__dirname, '../preload/index.cjs'),
+    rendererUrl: !app.isPackaged ? process.env['ELECTRON_RENDERER_URL'] : undefined,
+    rendererFile: app.isPackaged ? rendererFilePath() : join(__dirname, '../renderer/index.html'),
+    onShowMainWindow: () => mainWindow?.show(),
+    onTrayUnavailable: (error) =>
+      logger.warn('no system tray on this desktop; the menu-bar item is unavailable:', error),
+  });
+  menuBar.start();
 
   await seedAccountsOnFirstRun();
   await runCollection();
@@ -338,6 +446,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  menuBar?.destroy();
+  menuBar = undefined;
+  signInService?.cancel();
   if (pollTimer !== undefined) clearTimeout(pollTimer);
   if (accountRefreshTimer !== undefined) clearTimeout(accountRefreshTimer);
   inFlight?.abort();

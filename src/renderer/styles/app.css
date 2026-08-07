@@ -42,15 +42,41 @@ body {
 
 /* ---------------------------------------------------------------- toolbar */
 
+/*
+ * Three columns, with the title in the middle one, so it is optically centred no matter how
+ * wide the controls on the right become.
+ */
 .toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-raised);
   flex: none;
   -webkit-app-region: drag;
+}
+
+/*
+ * macOS draws its traffic lights over our header (titleBarStyle: hiddenInset), so the first
+ * column reserves room for them. Without this the title renders underneath the buttons.
+ * The attribute is set from the real platform reported by the main process.
+ */
+:root[data-platform='darwin'] .toolbar {
+  padding-left: 82px;
+}
+
+.toolbar__side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.toolbar__side--end {
+  justify-content: flex-end;
 }
 
 .toolbar__title {
@@ -58,6 +84,7 @@ body {
   font-weight: 600;
   letter-spacing: -0.01em;
   margin: 0;
+  white-space: nowrap;
 }
 
 .toolbar__spacer {
@@ -699,4 +726,217 @@ body {
     width: 100%;
     justify-content: flex-end;
   }
+}
+
+
+/* ---------------------------------------------------------------- popover */
+
+/* The popover is its own window, so it owns the full viewport. */
+:root[data-view='popover'],
+:root[data-view='popover'] body,
+:root[data-view='popover'] #root {
+  height: 100%;
+}
+
+.popover {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface-base);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.popover__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  flex: none;
+}
+
+.popover__title {
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.popover__sub {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.popover__head > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.popover__body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.popover__empty {
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.popover__foot {
+  flex: none;
+  display: flex;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+}
+
+.popover__foot .button {
+  width: 100%;
+}
+
+/* In the popover the account rail stacks above its windows rather than sitting beside them. */
+.grid--popover {
+  grid-template-columns: 1fr;
+}
+
+.grid--popover .account {
+  grid-template-columns: 1fr;
+}
+
+.grid--popover .account__identity {
+  border-right: none;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+}
+
+.grid--popover .account__windows {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+/* ---------------------------------------------------------------- consent & danger */
+
+.row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.row__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.consent,
+.danger {
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.danger {
+  border-color: var(--severity-critical);
+}
+
+.consent__text,
+.danger__text {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.consent__command {
+  display: block;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  /* A long install command must stay readable rather than widening the dialog. */
+  overflow-wrap: anywhere;
+}
+
+.consent__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.button--danger {
+  background: var(--severity-critical);
+  border-color: var(--severity-critical);
+  color: #fff;
+  font-weight: 600;
+}
+
+.button--danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.danger code,
+.danger__text code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--surface-sunken);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+/* ---------------------------------------------------------------- menu bar choice */
+
+.menubar-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.radio {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.radio:hover {
+  border-color: var(--border-strong);
+}
+
+.radio input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.radio span {
+  display: flex;
+  flex-direction: column;
+}
+
+.radio strong {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.radio em {
+  font-style: normal;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.radio input:disabled + span {
+  opacity: 0.5;
+}
+
+select.input {
+  width: 100%;
 }

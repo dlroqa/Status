@@ -22,26 +22,68 @@ bar that runs **green**, turns **amber at 50%** and **red at 85%**.
 
 ## Connecting an account
 
-Press **Connect an account**, pick a provider, and the app opens that provider's own CLI
-sign-in in a terminal. You authenticate in the official tool; the app then detects the
-session and starts showing bars.
+Press **Sign in**, approve in your browser, and the account appears. That is the whole flow.
 
-It works this way on purpose. Anthropic does not issue OAuth credentials to third-party
-applications, and its
-[terms](https://code.claude.com/docs/en/legal-and-compliance) prohibit a third-party app
-from offering a "sign in with Claude" flow or using consumer OAuth tokens. So this app
-**never asks for your password, never runs its own OAuth flow, and never uses API keys** —
-it reads the session the official CLI already wrote, and nothing else.
+If the provider's official client is not installed, the app shows you the exact command it
+will run — published by the vendor — and installs it once you approve. Nothing is downloaded
+or executed without you seeing it first.
+
+It works this way deliberately. Anthropic does not issue OAuth credentials to third-party
+applications, and its [terms](https://code.claude.com/docs/en/legal-and-compliance) prohibit
+a third-party app from offering a "sign in with Claude" flow or using consumer OAuth tokens
+elsewhere. So this app **never asks for your password, never runs an OAuth flow of its own,
+and never uses API keys** — the provider's own client does the authenticating, in your
+browser, and the app reads the session it wrote.
+
+| Provider | Client | Signs in via |
+|---|---|---|
+| Claude | `claude` | browser |
+| ChatGPT | `codex` | browser |
+| OpenCode | `opencode` | browser (Claude Pro/Max or ChatGPT Plus/Pro) |
 
 The accounts panel also lets you rename an account, set its monthly spend cap, add a second
 account of the same provider by pointing at its config folder, and stop tracking one.
 Removing an account only stops this app watching it; the CLI session is left signed in.
+
+## Menu bar
+
+On macOS a status item sits in the upper right showing a coloured dot and a percentage —
+green, amber past 50%, red past 85%. Click it for a popover with every connected account's
+5-hour, weekly and monthly bars.
+
+It tracks one of two things, your choice in the accounts panel:
+
+- **Closest to its limit** — whichever account will run out first, across all windows.
+- **A chosen account** — one account's 5-hour usage, always.
+
+An account with no reading shows `—`, never `0%`. Windows and Linux get the same tray icon
+and popover, with the figure in the tooltip, since only macOS draws text in the menu bar.
 
 ## Subscription authentication only
 
 Credential files are opened read-only and are never written to: refreshing a token behind a
 CLI's back could invalidate your login, so an expired session is reported for you to fix
 rather than repaired.
+
+## Your data stays on your machine
+
+Each installation gets a random identifier, written to `install-id` in the app's data folder
+so it stays stable while installed. It is generated with `crypto.randomUUID()` — **not**
+derived from any hardware or system value — and **it is never transmitted**. The app's only
+outbound requests are to the provider usage endpoints.
+
+**Remove all app data** in the accounts panel deletes everything the app created: your
+account list, monthly caps and the install id. Your Claude, ChatGPT and OpenCode sessions are
+left signed in, because this app did not create them — to sign out of those run
+`claude auth logout`, `codex logout` or `opencode auth logout` yourself.
+
+Windows removes the app data when you uninstall. **macOS has no uninstall hook at all** —
+dragging an app to the Trash runs nothing — so use *Remove all app data* before deleting the
+app, or remove the folder yourself:
+
+```bash
+rm -rf ~/Library/Application\ Support/ai-usage-monitor
+```
 
 ## Supported providers
 
