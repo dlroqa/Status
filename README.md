@@ -94,10 +94,34 @@ pnpm build:linux    # or build:win / build:mac
 
 `pnpm build` runs typecheck and tests before packaging.
 
-> **v0.1.0 is unsigned.** macOS shows a Gatekeeper prompt and Windows a SmartScreen
-> warning until signing certificates are configured. macOS and Windows installers can only
-> be produced on their own operating systems, which is why the release runs as a three-OS
-> GitHub Actions matrix.
+macOS and Windows installers can only be produced on their own operating systems, which is
+why the release runs as a three-OS GitHub Actions matrix.
+
+### First launch on macOS
+
+Releases are **ad-hoc signed, not notarised** — they carry no Apple Developer identity,
+because that needs a paid certificate. Ad-hoc signing is what makes the app runnable at
+all: macOS refuses to execute unsigned arm64 code outright, which is why a truly unsigned
+build shows a crossed-out icon in Finder instead of a prompt.
+
+Gatekeeper is a separate gate. Because the download is quarantined and the app is not
+notarised, the first launch needs one deliberate action:
+
+**Right-click the app in Applications and choose Open**, then confirm. macOS remembers the
+choice, so this is a one-time step. (Double-clicking will refuse — use Open from the
+right-click menu.)
+
+If macOS still refuses, clear the quarantine flag it set on download:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/AI Usage Monitor.app"
+```
+
+Download the build matching your Mac: `arm64` for Apple Silicon, the plain build for Intel.
+
+> **Windows** shows a SmartScreen warning for the same reason — choose **More info →
+> Run anyway**. Signing and notarising both platforms needs certificates; the build is
+> already configured so that adding them changes nothing else.
 
 ## How it is put together
 

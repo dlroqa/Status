@@ -69,5 +69,14 @@ jobs:
           files: artifacts/*
           draft: false
           body: |
-            Unsigned first release. macOS shows a Gatekeeper prompt and Windows a
-            SmartScreen warning until signing certificates are configured.
+            Builds are ad-hoc signed but **not notarised**, because notarisation needs a
+            paid Apple Developer certificate.
+
+            **macOS first launch:** right-click the app in Applications and choose
+            **Open**, then confirm. Double-clicking will refuse. macOS remembers the
+            choice. If it still refuses:
+            `xattr -dr com.apple.quarantine "/Applications/AI Usage Monitor.app"`
+
+            Pick `arm64` for Apple Silicon, the plain build for Intel.
+
+            **Windows:** SmartScreen will warn — choose **More info → Run anyway**.

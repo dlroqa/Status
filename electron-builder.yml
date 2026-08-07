@@ -51,8 +51,17 @@ mac:
       arch: [x64, arm64]
   category: public.app-category.developer-tools
   icon: build/icon.png
-  # v0.1.0 ships unsigned; signing and notarisation need certificates that are not part
-  # of this repository. Hardened runtime is on so that signing later needs no changes.
+  # Ad-hoc signing. Without this, electron-builder finds no Developer ID certificate and
+  # skips signing entirely — and macOS refuses to launch unsigned arm64 code at all, which
+  # is why an unsigned build shows a crossed-out icon in Finder rather than a Gatekeeper
+  # prompt. An ad-hoc signature carries no identity and does not satisfy notarisation, but
+  # it does make the app runnable. Real signing later only needs a certificate plus
+  # CSC_LINK/CSC_KEY_PASSWORD; nothing else here changes.
+  #
+  # Ad-hoc signing combined with hardenedRuntime requires the
+  # com.apple.security.cs.disable-library-validation entitlement, which
+  # build/entitlements.mac.plist provides. Removing one without the other breaks launch.
+  identity: '-'
   hardenedRuntime: true
   gatekeeperAssess: false
   extendInfo:

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the hardened runtime.
+
+  Deliberately minimal. The app reads local config files and talks to provider usage
+  endpoints; it has no business requesting camera, microphone, Bluetooth, USB or location,
+  so the broader default set shipped by @electron/osx-sign is not used here.
+-->
+<plist version="1.0">
+  <dict>
+    <!-- V8 compiles JavaScript at runtime; without JIT the renderer cannot start. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!--
+      Required because this build is ad-hoc signed rather than signed with a Developer ID.
+      Under the hardened runtime, library validation refuses to load libraries whose team
+      identifier differs from the main binary's. An ad-hoc signature has no team
+      identifier, so every bundled framework would fail to load and the app would be killed
+      on launch. This entitlement is what makes an unsigned-in-practice build runnable.
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>
