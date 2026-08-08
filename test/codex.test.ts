@@ -144,3 +144,41 @@ describe('scanLinesForSnapshot', () => {
     expect(scanLinesForSnapshot(text, mtime)?.observedAt).toBe('2026-08-06T12:00:00.000Z');
   });
 });
+
+describe('missing snapshots', () => {
+  it('tells an unused Codex apart from one that logged no limits', async () => {
+    // Signing in and never running Codex is not the upstream logging gap, and pointing a
+    // new user at a bug report would send them chasing nothing.
+    const { CodexAdapter } = await import('@main/providers/codex');
+    const { AccountScope } = await import('@main/scope');
+    const { mkdtemp, writeFile, mkdir } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+
+    const logger = { info: () => {}, warn: () => {}, error: () => {} };
+    const dir = await mkdtemp(join(tmpdir(), 'codex-'));
+    await writeFile(
+      join(dir, 'auth.json'),
+      JSON.stringify({ tokens: { account_id: 'acct-123', id_token: null, access_token: 'tok' } }),
+    );
+
+    const adapter = new CodexAdapter();
+    const unused = await adapter.probe(new AccountScope(dir), { now: new Date(), logger });
+    const unusedWindow = unused.windows['5h'];
+    expect(unusedWindow.state).toBe('unavailable');
+    if (unusedWindow.state !== 'unavailable') throw new Error('expected unavailable');
+    expect(unusedWindow.reason).toContain('no usage recorded yet');
+
+    // Now with a session file that carries no rate limits at all.
+    await mkdir(join(dir, 'sessions'), { recursive: true });
+    await writeFile(
+      join(dir, 'sessions', 'rollout-a.jsonl'),
+      `${JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', rate_limits: null } })}\n`,
+    );
+
+    const used = await adapter.probe(new AccountScope(dir), { now: new Date(), logger });
+    const usedWindow = used.windows['5h'];
+    if (usedWindow.state !== 'unavailable') throw new Error('expected unavailable');
+    expect(usedWindow.reason).toContain('reported no limits');
+  });
+});

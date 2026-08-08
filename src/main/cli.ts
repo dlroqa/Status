@@ -24,6 +24,16 @@ interface ProviderCli {
   readonly command: string;
   /** Arguments that start an interactive sign-in. */
   readonly loginArgs: readonly string[];
+  /**
+   * A read-only status command.
+   *
+   * Running it asks the official client to check its own session, which is what refreshes an
+   * expired access token. This app cannot perform an OAuth refresh itself: that needs the
+   * client's OAuth client_id, which no vendor issues to third parties and which this project
+   * deliberately does not embed. Letting the client do it keeps the token valid without
+   * anyone impersonating anyone.
+   */
+  readonly statusArgs: readonly string[];
   /** Where to send the user when the CLI is not installed. */
   readonly installUrl: string;
 }
@@ -33,17 +43,22 @@ export const PROVIDER_CLIS: Readonly<Record<Provider, ProviderCli>> = {
   claude: {
     command: 'claude',
     loginArgs: ['auth', 'login'],
+    // Verified against `claude auth status --help`.
+    statusArgs: ['auth', 'status', '--json'],
     installUrl: 'https://claude.com/download',
   },
   // Verified against `codex login --help`; bare `codex login` starts the flow.
   chatgpt: {
     command: 'codex',
     loginArgs: ['login'],
+    // Verified against `codex login status --help`.
+    statusArgs: ['login', 'status'],
     installUrl: 'https://developers.openai.com/codex/cli',
   },
   opencode: {
     command: 'opencode',
     loginArgs: ['auth', 'login'],
+    statusArgs: ['auth', 'list'],
     installUrl: 'https://opencode.ai/docs',
   },
 };
@@ -83,6 +98,15 @@ function candidateDirectories(): string[] {
           join(home, '.deno', 'bin'),
           join(home, '.npm-global', 'bin'),
           join(home, '.volta', 'bin'),
+          /*
+           * Vendor installers that place a binary outside the usual locations and only add
+           * it to a shell rc file. A GUI app never sources those, so without these entries
+           * a freshly installed client is reported as missing — which is exactly what
+           * OpenCode did: its installer uses $HOME/.opencode/bin and appends that to the
+           * user's shell profile.
+           */
+          join(home, '.opencode', 'bin'),
+          join(home, '.codex', 'bin'),
         ];
 
   return [...fromPath, ...system, ...perUser];
@@ -129,6 +153,41 @@ export async function statusFor(provider: Provider): Promise<CliStatus> {
 
 export async function allStatuses(): Promise<CliStatus[]> {
   return Promise.all((Object.keys(PROVIDER_CLIS) as Provider[]).map(statusFor));
+}
+
+/** A status check should be quick; a hung CLI must not stall a poll. */
+const STATUS_TIMEOUT_MS = 20_000;
+
+/**
+ * Asks the provider's own client to check — and thereby refresh — its session.
+ *
+ * Output is discarded. The point is the side effect: the official client notices its access
+ * token has expired and exchanges its refresh token, updating the session in place. The app
+ * then re-reads it. Nothing here handles a token.
+ */
+export async function refreshSessionViaCli(provider: Provider, logger: Logger): Promise<boolean> {
+  const cli = PROVIDER_CLIS[provider];
+  const executable = await findCli(cli.command);
+  if (executable === undefined) return false;
+
+  return new Promise<boolean>((resolve) => {
+    const child = spawn(executable, [...cli.statusArgs], { stdio: 'ignore', env: process.env });
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve(false);
+    }, STATUS_TIMEOUT_MS);
+
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      logger.warn(`could not run ${cli.command} ${cli.statusArgs.join(' ')}:`, error);
+      resolve(false);
+    });
+    // Even a non-zero exit may have refreshed the session, so the caller re-reads regardless.
+    child.on('close', () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
 }
 
 /* -------------------------------------------------------------------------- */

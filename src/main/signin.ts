@@ -90,7 +90,7 @@ export class SignInService {
       if (executable === undefined) {
         return {
           ok: false,
-          reason: `${cli.command} installed but could not be found afterwards. Open a new terminal and check that it runs.`,
+          reason: `${cli.command} installed, but its binary was not found in any of the usual locations. Some installers only add themselves to your shell profile, which an app does not read. Open a terminal, confirm \`${cli.command}\` runs, then press "Detect accounts".`,
         };
       }
     }
@@ -156,19 +156,39 @@ export class SignInService {
     child.stdout?.on('data', inspect);
     child.stderr?.on('data', inspect);
 
-    const exited = await new Promise<number | null>((resolve) => {
-      child.on('error', () => resolve(null));
-      child.on('close', (code) => resolve(code));
-      // Once the browser is open the CLI may sit waiting for the callback; that is success
-      // enough to move on to detection, which is what actually confirms the sign-in.
-      setTimeout(() => resolve(openedUrl ? 0 : null), 20_000);
+    /*
+     * Three outcomes matter here, and an earlier version conflated two of them.
+     *
+     * Some clients print a URL for us to open. Others — Claude Code among them — open the
+     * browser themselves and print nothing, then sit waiting for the callback. Treating
+     * "no URL seen" as failure meant a sign-in that was working perfectly also got a
+     * terminal thrown at it, so the only real signal is whether the process is still alive.
+     */
+    type Outcome = { kind: 'exited'; code: number | null } | { kind: 'running' } | { kind: 'failed' };
+
+    const outcome = await new Promise<Outcome>((resolve) => {
+      child.on('error', () => resolve({ kind: 'failed' }));
+      child.on('close', (code) => resolve({ kind: 'exited', code }));
+      setTimeout(() => resolve(child.exitCode === null ? { kind: 'running' } : { kind: 'exited', code: child.exitCode }), 15_000);
     });
 
-    if (!openedUrl && (sawTtyComplaint || exited !== 0)) {
-      return this.fallBackToTerminal(provider, 'this CLI needs a terminal to sign in', report);
+    if (outcome.kind === 'running' || openedUrl) {
+      // Still waiting on the browser, or we opened the page ourselves. Either way the
+      // authentication is under way and detection is what confirms it.
+      if (!openedUrl) {
+        report('awaiting-approval', 'Approve the sign-in in your browser, then come back.');
+      }
+      return { ok: true, detail: 'browser opened' };
     }
 
-    return { ok: true, detail: 'browser opened' };
+    // It exited without ever getting a browser involved. A zero exit here usually means the
+    // client refused to run without a terminal.
+    if (sawTtyComplaint || outcome.kind === 'failed' || outcome.code !== 0) {
+      return this.fallBackToTerminal(provider, 'the client needs a terminal to sign in', report);
+    }
+
+    // Exited cleanly with no browser step: it may already have been signed in.
+    return { ok: true, detail: 'sign-in completed' };
   }
 
   /** Opens a real terminal running the provider's sign-in, for CLIs that need a TTY. */

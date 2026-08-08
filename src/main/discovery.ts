@@ -25,8 +25,13 @@ export async function discoverAccounts(
   for (const adapter of Object.values(adapters)) {
     for (const configDir of adapter.defaultConfigDirs()) {
       const scope = new AccountScope(configDir, adapter.companionFiles?.(configDir) ?? []);
-      if (!(await scope.exists())) continue;
 
+      /*
+       * The directory is not required to exist. On macOS Claude Code keeps its session in
+       * the login Keychain, so skipping a missing config directory here would make a
+       * successful browser sign-in look like nothing had happened. Whether a session exists
+       * is the adapter's question to answer, not this loop's.
+       */
       let identity;
       try {
         ({ identity } = await adapter.probe(scope, { now, logger }));

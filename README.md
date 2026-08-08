@@ -35,11 +35,20 @@ elsewhere. So this app **never asks for your password, never runs an OAuth flow 
 and never uses API keys** — the provider's own client does the authenticating, in your
 browser, and the app reads the session it wrote.
 
-| Provider | Client | Signs in via |
-|---|---|---|
-| Claude | `claude` | browser |
-| ChatGPT | `codex` | browser |
-| OpenCode | `opencode` | browser (Claude Pro/Max or ChatGPT Plus/Pro) |
+| Provider | Client | Signs in via | Session stored in |
+|---|---|---|---|
+| Claude | `claude` | browser | macOS **login Keychain**; a file in `~/.claude` elsewhere |
+| ChatGPT | `codex` | browser | `~/.codex/auth.json` |
+| OpenCode | `opencode` | browser (Claude Pro/Max or ChatGPT Plus/Pro) | `~/.local/share/opencode/auth.json` |
+
+On macOS, Claude Code keeps its session in the login Keychain rather than on disk, so the
+app reads it from there. macOS may ask you to allow that the first time. Because the
+Keychain holds one entry per user rather than one per folder, a second Claude account added
+by folder is only read from that folder — it is never attributed the default account's
+session.
+
+ChatGPT usage appears once Codex has actually run; signing in alone records nothing to
+read.
 
 The accounts panel also lets you rename an account, set its monthly spend cap, add a second
 account of the same provider by pointing at its config folder, and stop tracking one.
@@ -61,9 +70,16 @@ and popover, with the figure in the tooltip, since only macOS draws text in the 
 
 ## Subscription authentication only
 
-Credential files are opened read-only and are never written to: refreshing a token behind a
-CLI's back could invalidate your login, so an expired session is reported for you to fix
-rather than repaired.
+Credential files are opened read-only and are never written to.
+
+**Sessions are kept fresh.** A subscription access token lasts hours, so the app tracks when
+the one it holds expires. When it is close to or past that point, it runs the provider's own
+read-only status command (`claude auth status`, `codex login status`), which makes the
+official client refresh its session, and then re-reads it. The app cannot perform the OAuth
+refresh itself — that needs the client's `client_id`, which no vendor issues to third parties
+and which this project deliberately does not embed. The same recovery runs once if the server
+rejects a session whose stored expiry looked fine, so a revoked token or a skewed clock does
+not surface as "sign in again".
 
 ## Your data stays on your machine
 

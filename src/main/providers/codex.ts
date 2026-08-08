@@ -105,20 +105,12 @@ export class CodexAdapter implements ProviderAdapter {
       return { identity: null, windows: allWindows(auth.measurement) };
     }
 
-    const snapshot = await findLatestSnapshot(scope, context);
-    if (snapshot === undefined) {
-      return {
-        identity: auth.identity,
-        windows: allWindows(
-          unavailable('Codex has not recorded a rate-limit snapshot', {
-            detail:
-              'Run codex and use /status to make it record one. Recent Codex builds often log no rate limits at all (openai/codex#14880).',
-          }),
-        ),
-      };
+    const found = await findLatestSnapshot(scope, context);
+    if (found.snapshot === undefined) {
+      return { identity: auth.identity, windows: allWindows(describeMissingSnapshot(found.sessionsSeen)) };
     }
 
-    return { identity: auth.identity, windows: mapSnapshot(snapshot.snapshot, snapshot.observedAt) };
+    return { identity: auth.identity, windows: mapSnapshot(found.snapshot.snapshot, found.snapshot.observedAt) };
   }
 
   private async readIdentity(
@@ -203,13 +195,39 @@ interface FoundSnapshot {
   readonly observedAt: string;
 }
 
+/**
+ * Explains an absent snapshot.
+ *
+ * Signing in and never using Codex is not the same failure as Codex declining to log its
+ * limits, and they need different things from the user. Reporting a known upstream bug to
+ * someone who simply has not run the tool yet would send them chasing nothing.
+ */
+function describeMissingSnapshot(sessionsSeen: boolean): Measurement {
+  if (!sessionsSeen) {
+    return unavailable('no usage recorded yet', {
+      detail:
+        'Codex reports its limits as it works, so figures appear after it has run. If your ChatGPT plan does not include Codex, there are no limits to show.',
+    });
+  }
+  return unavailable('Codex reported no limits', {
+    detail:
+      'Codex has run but logged no limit figures. That is expected on a plan without a Codex allowance, and also happens on some Codex builds (openai/codex#14880).',
+  });
+}
+
+interface SnapshotSearch {
+  readonly snapshot: FoundSnapshot | undefined;
+  /** True when Codex has session logs at all, which distinguishes "unused" from "not logged". */
+  readonly sessionsSeen: boolean;
+}
+
 /** Scans the newest session logs backwards for the most recent non-null rate-limit snapshot. */
 async function findLatestSnapshot(
   scope: AccountScope,
   context: ProbeContext,
-): Promise<FoundSnapshot | undefined> {
+): Promise<SnapshotSearch> {
   const files = await scope.listFiles('sessions', { extension: '.jsonl' });
-  if (files.length === 0) return undefined;
+  if (files.length === 0) return { snapshot: undefined, sessionsSeen: false };
 
   const withTimes = await Promise.all(
     files.map(async (file) => ({ file, mtime: (await scope.modifiedAt(file)) ?? 0 })),
@@ -221,9 +239,9 @@ async function findLatestSnapshot(
     if (text === undefined) continue;
 
     const found = scanLinesForSnapshot(text, mtime, context);
-    if (found !== undefined) return found;
+    if (found !== undefined) return { snapshot: found, sessionsSeen: true };
   }
-  return undefined;
+  return { snapshot: undefined, sessionsSeen: true };
 }
 
 /** Exported for tests: finds the last snapshot in a chunk of JSONL. */

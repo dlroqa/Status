@@ -1,6 +1,6 @@
 {
   "name": "ai-usage-monitor",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Track 5-hour, weekly and monthly usage across your AI subscription accounts",
   "author": "Ed <erocaide@gmail.com>",
   "license": "MIT",

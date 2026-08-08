@@ -82,12 +82,20 @@ describe('no secrets in the repository', () => {
   });
 
   it('never hardcodes an OAuth client id', () => {
-    // The app drives the providers' own CLIs precisely so that no client identity of any
-    // kind needs to exist here. A client_id appearing in source would mean that decision
-    // had been quietly reversed.
+    /*
+     * The app drives the providers' own CLIs precisely so that no client identity needs to
+     * exist here, and a client_id appearing in source would mean that decision had been
+     * quietly reversed.
+     *
+     * This matches an *assignment* — `client_id: "..."`, `clientId = '...'`, or a
+     * `client_id=` query parameter — rather than the words themselves. Several comments
+     * explain why no client id is embedded, and banning the explanation along with the
+     * thing it explains would only push people to delete the reasoning.
+     */
+    const assignment = /client[_-]?id\s*[:=]\s*['"`]|[?&]client_id=/i;
     const offenders = files
       .filter((file) => file.startsWith('src/'))
-      .filter((file) => /client[_-]?id/i.test(readFileSync(resolve(ROOT, file), 'utf8')));
+      .filter((file) => assignment.test(readFileSync(resolve(ROOT, file), 'utf8')));
 
     expect(offenders).toEqual([]);
   });

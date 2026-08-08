@@ -66,3 +66,23 @@ describe('findCli', () => {
     expect(found === undefined || found.endsWith('/sh')).toBe(true);
   });
 });
+
+describe('status commands', () => {
+  it('gives every provider a read-only status command to refresh with', () => {
+    // The app cannot perform an OAuth refresh itself — that needs a client_id no vendor
+    // issues to third parties — so refreshing means asking the official client to check
+    // its own session. Verified against each CLI's help output.
+    expect(PROVIDER_CLIS.claude.statusArgs).toEqual(['auth', 'status', '--json']);
+    expect(PROVIDER_CLIS.chatgpt.statusArgs).toEqual(['login', 'status']);
+    expect(PROVIDER_CLIS.opencode.statusArgs).toEqual(['auth', 'list']);
+  });
+
+  it('never uses a status command that could change state', () => {
+    const mutating = /login|logout|connect|remove|delete|set/;
+    for (const cli of Object.values(PROVIDER_CLIS)) {
+      const joined = cli.statusArgs.join(' ');
+      // `login status` is a read-only subcommand of `login`, so only a bare verb is a risk.
+      expect(joined === 'login status' || !mutating.test(joined)).toBe(true);
+    }
+  });
+});
