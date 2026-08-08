@@ -206,7 +206,7 @@ export class SignInService {
     report(
       'awaiting-approval',
       provider === 'opencode'
-        ? 'In the terminal, type /connect and choose your subscription. Your browser will open.'
+        ? 'Choose your provider in the terminal — Claude Pro/Max for usage figures — and your browser will open.'
         : 'Finish signing in through the terminal and your browser.',
     );
     return { ok: true, detail: launched.detail };

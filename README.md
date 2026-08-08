@@ -39,7 +39,7 @@ browser, and the app reads the session it wrote.
 |---|---|---|---|
 | Claude | `claude` | browser | macOS **login Keychain**; a file in `~/.claude` elsewhere |
 | ChatGPT | `codex` | browser | `~/.codex/auth.json` |
-| OpenCode | `opencode` | browser (Claude Pro/Max or ChatGPT Plus/Pro) | `~/.local/share/opencode/auth.json` |
+| OpenCode | `opencode` | browser (Claude Pro/Max or ChatGPT Plus/Pro) | `$XDG_DATA_HOME/opencode/auth.json`, else `~/.local/share/opencode/auth.json` |
 
 On macOS, Claude Code keeps its session in the login Keychain rather than on disk, so the
 app reads it from there. macOS may ask you to allow that the first time. Because the
@@ -47,8 +47,13 @@ Keychain holds one entry per user rather than one per folder, a second Claude ac
 by folder is only read from that folder — it is never attributed the default account's
 session.
 
-ChatGPT usage appears once Codex has actually run; signing in alone records nothing to
-read.
+ChatGPT usage appears once Codex has actually run; signing in alone records nothing to read,
+and a plan without a Codex allowance has no limits to report.
+
+OpenCode is a client for someone else's subscription, so what it can show depends on which
+provider you connect it to: a Claude Pro/Max login reports real figures, while other
+providers publish no usage endpoint this app can read and say so rather than showing a
+guessed number.
 
 The accounts panel also lets you rename an account, set its monthly spend cap, add a second
 account of the same provider by pointing at its config folder, and stop tracking one.

@@ -55,6 +55,9 @@ export const PROVIDER_CLIS: Readonly<Record<Provider, ProviderCli>> = {
     statusArgs: ['login', 'status'],
     installUrl: 'https://developers.openai.com/codex/cli',
   },
+  // Verified against the installed binary: `opencode providers` carries the alias `auth`,
+  // with subcommands list/login/logout. `auth list` is non-interactive and prints the path
+  // to auth.json, which is also how the data directory was confirmed.
   opencode: {
     command: 'opencode',
     loginArgs: ['auth', 'login'],
